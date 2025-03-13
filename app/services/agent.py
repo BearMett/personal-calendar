@@ -1,11 +1,14 @@
 import logging
+import asyncio
 from typing import Dict, Any, Optional, List, Tuple, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from .nlp import NLPService
 from .calendar_api import CalendarService
+from .ollama_service import OllamaService
+from config import settings
 from ..models.event import Event
 from ..models.task import Task
 
@@ -23,6 +26,9 @@ class AgentService:
         self.db = db
         self.nlp_service = NLPService()
         self.calendar_service = CalendarService(db)
+        self.ollama_enabled = settings.OLLAMA_ENABLED
+        if self.ollama_enabled:
+            self.ollama_service = OllamaService()
 
     def process_command(self, user_id: int, text: str) -> Dict[str, Any]:
         """
@@ -36,7 +42,18 @@ class AgentService:
 
         Returns a dict with the result of the command.
         """
-        command_type = self._classify_command(text)
+        # Try LLM-based command classification first if enabled
+        command_type = "unknown"
+        if self.ollama_enabled:
+            try:
+                command_type = asyncio.run(self._classify_command_with_llm(text))
+            except Exception as e:
+                logger.warning(
+                    f"Failed to classify command with LLM: {str(e)}. Falling back to rule-based classification."
+                )
+                command_type = self._classify_command(text)
+        else:
+            command_type = self._classify_command(text)
 
         if command_type == "create_event":
             return self._handle_create_event(user_id, text)
@@ -48,6 +65,9 @@ class AgentService:
             return self._handle_show_tasks(user_id, text)
         elif command_type == "update_task_status":
             return self._handle_update_task_status(user_id, text)
+        elif self.ollama_enabled and command_type == "complex_query":
+            # Handle complex queries with LLM assistance
+            return asyncio.run(self._handle_complex_query(user_id, text))
         else:
             return {
                 "success": False,
@@ -134,6 +154,127 @@ class AgentService:
 
         # Default
         return "unknown"
+
+    async def _classify_command_with_llm(self, text: str) -> str:
+        """
+        Classify the user's command using LLM.
+
+        This provides more accurate classification for complex or ambiguous commands.
+        """
+        # Define possible command types
+        command_schema = {
+            "command_type": "string (create_event, create_task, show_events, show_tasks, update_task_status, complex_query)",
+            "confidence": "number (0-1)",
+        }
+
+        system_prompt = """
+        You are a calendar assistant that classifies user commands into specific action types.
+        Classify the command into one of these categories:
+        - create_event: Creating or scheduling a new calendar event
+        - create_task: Adding a new task to a to-do list
+        - show_events: Displaying or listing calendar events
+        - show_tasks: Displaying or listing tasks
+        - update_task_status: Changing the status of a task (e.g., marking as complete)
+        - complex_query: Any command that doesn't fit the above categories or combines multiple actions
+        
+        Respond with the command_type and your confidence level (0-1).
+        """
+
+        # Get classification from LLM
+        result = await self.ollama_service.generate_structured_output(
+            text, command_schema, system_prompt
+        )
+
+        if "command_type" in result:
+            command_type = result["command_type"].lower()
+            confidence = float(result.get("confidence", 0))
+
+            # Only accept classification if confidence is high enough
+            if confidence >= 0.7:
+                return command_type
+            elif command_type != "unknown":
+                # For lower confidence but valid classification, still accept it
+                return command_type
+
+        # Default to unknown if LLM classification failed
+        return "unknown"
+
+    async def _handle_complex_query(self, user_id: int, text: str) -> Dict[str, Any]:
+        """
+        Handle complex queries that require deeper understanding and context.
+        Uses LLM to generate a more comprehensive response.
+        """
+        try:
+            # First, gather relevant context
+            # Get recent events (limit to 5)
+            recent_events = self.calendar_service.get_events(
+                user_id=user_id,
+                start_date=datetime.now() - timedelta(days=7),
+                end_date=datetime.now() + timedelta(days=14),
+            )[:5]
+
+            # Get active tasks (limit to 5)
+            active_tasks = self.calendar_service.get_tasks(
+                user_id=user_id, status="todo"
+            )[:5]
+
+            # Format context for the LLM
+            context = "Current calendar context:\n"
+
+            if recent_events:
+                context += "\nUpcoming events:\n"
+                for event in recent_events:
+                    context += f"- {event.title} on {event.start_time.strftime('%Y-%m-%d %H:%M')} at {event.location or 'No location'}\n"
+            else:
+                context += "\nNo upcoming events.\n"
+
+            if active_tasks:
+                context += "\nActive tasks:\n"
+                for task in active_tasks:
+                    due_date = (
+                        task.due_date.strftime("%Y-%m-%d")
+                        if task.due_date
+                        else "No due date"
+                    )
+                    context += f"- {task.title} (Priority: {task.priority.value}, Due: {due_date})\n"
+            else:
+                context += "\nNo active tasks.\n"
+
+            # Create system prompt for the LLM to process the complex query
+            system_prompt = """
+            You are a helpful calendar assistant that can answer questions about events and tasks.
+            Based on the calendar context provided and the user's question, provide a helpful response.
+            If the query involves creating or modifying calendar items, explain what would need to be done.
+            """
+
+            # Combine context and user query
+            prompt = (
+                f"{context}\n\nUser query: {text}\n\nPlease provide a helpful response:"
+            )
+
+            # Get response from LLM
+            response = await self.ollama_service.generate_completion(
+                prompt, system_prompt
+            )
+
+            return {
+                "success": True,
+                "message": "Processed your complex query",
+                "command_type": "complex_query",
+                "response": response,
+                "context_provided": {
+                    "events_count": len(recent_events),
+                    "tasks_count": len(active_tasks),
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Error handling complex query: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to process your complex query: {str(e)}",
+                "command_type": "complex_query",
+            }
 
     def _handle_create_event(self, user_id: int, text: str) -> Dict[str, Any]:
         """Handle creating an event from natural language."""

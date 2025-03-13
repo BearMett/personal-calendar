@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google-auth-callback"
     GOOGLE_CREDENTIALS_DIR: str = "credentials"
 
+    # Ollama LLM Settings
+    OLLAMA_ENABLED: bool = True
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "qwen2.5:7b"
+    OLLAMA_API_ENDPOINT: str = "/v1/chat/completions"
+    OLLAMA_TEMPERATURE: float = 0.7
+    OLLAMA_MAX_TOKENS: int = 4000
+    OLLAMA_TIMEOUT: int = 30  # seconds
+
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         if v:

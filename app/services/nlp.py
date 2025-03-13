@@ -1,8 +1,9 @@
 import re
-import datetime
-from typing import Dict, Any, Optional, Tuple, List
 import logging
+import json
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime, timedelta
+import asyncio
 
 import spacy
 
@@ -17,6 +18,7 @@ except:
     nlp = spacy.load("en_core_web_sm")
 
 from config import settings
+from .ollama_service import OllamaService
 
 logger = logging.getLogger("nlp_service")
 
@@ -27,6 +29,9 @@ class NLPService:
     def __init__(self):
         """Initialize the NLP service."""
         self.nlp = nlp
+        self.ollama_enabled = settings.OLLAMA_ENABLED
+        if self.ollama_enabled:
+            self.ollama_service = OllamaService()
 
     def parse_event(self, text: str) -> Dict[str, Any]:
         """
@@ -41,6 +46,18 @@ class NLPService:
             "location": "coffee shop"
         }
         """
+        # First try using Ollama if enabled
+        if self.ollama_enabled:
+            try:
+                event_data = asyncio.run(self._parse_event_with_llm(text))
+                if event_data and "title" in event_data:
+                    return event_data
+            except Exception as e:
+                logger.warning(
+                    f"Failed to parse event with LLM: {e}. Falling back to rule-based parsing."
+                )
+
+        # Fall back to rule-based parsing if LLM fails or is disabled
         doc = self.nlp(text)
 
         # Default values
@@ -92,6 +109,18 @@ class NLPService:
             "priority": "high"
         }
         """
+        # First try using Ollama if enabled
+        if self.ollama_enabled:
+            try:
+                task_data = asyncio.run(self._parse_task_with_llm(text))
+                if task_data and "title" in task_data:
+                    return task_data
+            except Exception as e:
+                logger.warning(
+                    f"Failed to parse task with LLM: {e}. Falling back to rule-based parsing."
+                )
+
+        # Fall back to rule-based parsing if LLM fails or is disabled
         doc = self.nlp(text)
 
         # Default values
@@ -124,6 +153,132 @@ class NLPService:
                 ),
             ],
         )
+
+        return task_data
+
+    async def _parse_event_with_llm(self, text: str) -> Dict[str, Any]:
+        """
+        Use LLM to extract event information from natural language text.
+
+        Returns a structured event object with title, start_time, end_time, location, etc.
+        """
+        # Define the schema for event data
+        event_schema = {
+            "title": "string",
+            "location": "string or null",
+            "start_time": "ISO datetime string",
+            "end_time": "ISO datetime string",
+            "is_all_day": "boolean",
+            "description": "string or null",
+        }
+
+        system_prompt = """
+        You are a calendar assistant that extracts event information from user text.
+        Extract the following details: event title, location, start time, end time, and whether it's an all-day event.
+        If specific information is not provided, make a reasonable guess based on context.
+        For all dates and times, use the current date as reference and return ISO format.
+        """
+
+        # Get structured output from LLM
+        result = await self.ollama_service.generate_structured_output(
+            text, event_schema, system_prompt
+        )
+
+        # Process the result
+        event_data = {}
+
+        if "title" in result:
+            event_data["title"] = result["title"]
+
+        if "location" in result:
+            event_data["location"] = result["location"]
+
+        if "description" in result:
+            event_data["description"] = result["description"]
+
+        if "is_all_day" in result:
+            event_data["is_all_day"] = result["is_all_day"]
+
+        # Parse datetime strings
+        if "start_time" in result and result["start_time"]:
+            try:
+                event_data["start_time"] = datetime.fromisoformat(
+                    result["start_time"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                logger.warning(f"Could not parse start_time: {result['start_time']}")
+
+        if "end_time" in result and result["end_time"]:
+            try:
+                event_data["end_time"] = datetime.fromisoformat(
+                    result["end_time"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                logger.warning(f"Could not parse end_time: {result['end_time']}")
+                # If we have start_time but end_time parsing failed, set end_time to start_time + 1 hour
+                if "start_time" in event_data:
+                    event_data["end_time"] = event_data["start_time"] + timedelta(
+                        hours=1
+                    )
+
+        return event_data
+
+    async def _parse_task_with_llm(self, text: str) -> Dict[str, Any]:
+        """
+        Use LLM to extract task information from natural language text.
+
+        Returns a structured task object with title, due_date, priority, etc.
+        """
+        # Define the schema for task data
+        task_schema = {
+            "title": "string",
+            "due_date": "ISO datetime string or null",
+            "priority": "string (low, medium, high)",
+            "description": "string or null",
+            "status": "string (todo, in_progress, done)",
+        }
+
+        system_prompt = """
+        You are a task management assistant that extracts task information from user text.
+        Extract the following details: task title, due date, priority level, description, and status.
+        For priority, use only 'low', 'medium', or 'high'.
+        For status, use only 'todo', 'in_progress', or 'done'.
+        If specific information is not provided, make a reasonable guess based on context.
+        For dates, use the current date as reference and return ISO format.
+        """
+
+        # Get structured output from LLM
+        result = await self.ollama_service.generate_structured_output(
+            text, task_schema, system_prompt
+        )
+
+        # Process the result
+        task_data = {}
+
+        if "title" in result:
+            task_data["title"] = result["title"]
+
+        if "description" in result:
+            task_data["description"] = result["description"]
+
+        if "priority" in result and result["priority"] in ["low", "medium", "high"]:
+            task_data["priority"] = result["priority"]
+        else:
+            task_data["priority"] = "medium"  # Default
+
+        if "status" in result and result["status"] in ["todo", "in_progress", "done"]:
+            task_data["status"] = result["status"]
+        else:
+            task_data["status"] = "todo"  # Default
+
+        # Parse datetime string for due_date
+        if "due_date" in result and result["due_date"]:
+            try:
+                task_data["due_date"] = datetime.fromisoformat(
+                    result["due_date"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                logger.warning(f"Could not parse due_date: {result['due_date']}")
 
         return task_data
 
