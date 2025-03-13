@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 
-from ...config import settings
+from config import settings
 
 # Configure logging
 logging.basicConfig(
@@ -15,30 +15,42 @@ logger = logging.getLogger("calendar_notification")
 
 class NotificationService(abc.ABC):
     """Abstract base class for notification services."""
-    
+
     @abc.abstractmethod
-    def send_notification(self, user_id: int, title: str, message: str, **kwargs) -> bool:
+    def send_notification(
+        self, user_id: int, title: str, message: str, **kwargs
+    ) -> bool:
         """Send a notification to a user."""
         pass
-    
+
     @abc.abstractmethod
-    def send_reminder(self, user_id: int, event_id: Optional[int] = None, 
-                     task_id: Optional[int] = None) -> bool:
+    def send_reminder(
+        self,
+        user_id: int,
+        event_id: Optional[int] = None,
+        task_id: Optional[int] = None,
+    ) -> bool:
         """Send a reminder for an event or task."""
         pass
 
 
 class LogNotificationService(NotificationService):
     """Notification service that logs messages instead of sending real notifications."""
-    
-    def send_notification(self, user_id: int, title: str, message: str, **kwargs) -> bool:
+
+    def send_notification(
+        self, user_id: int, title: str, message: str, **kwargs
+    ) -> bool:
         """Log a notification message."""
         logger.info(f"NOTIFICATION to user {user_id} - {title}: {message}")
         logger.debug(f"Additional data: {kwargs}")
         return True
-    
-    def send_reminder(self, user_id: int, event_id: Optional[int] = None, 
-                     task_id: Optional[int] = None) -> bool:
+
+    def send_reminder(
+        self,
+        user_id: int,
+        event_id: Optional[int] = None,
+        task_id: Optional[int] = None,
+    ) -> bool:
         """Log a reminder message."""
         if event_id:
             logger.info(f"EVENT REMINDER to user {user_id} for event_id {event_id}")
@@ -53,31 +65,37 @@ class LogNotificationService(NotificationService):
 
 class EmailNotificationService(NotificationService):
     """Notification service that sends emails."""
-    
+
     def __init__(self):
         self.enabled = settings.EMAIL_ENABLED
         if not self.enabled:
             logger.warning("Email notifications are disabled")
-    
-    def send_notification(self, user_id: int, title: str, message: str, **kwargs) -> bool:
+
+    def send_notification(
+        self, user_id: int, title: str, message: str, **kwargs
+    ) -> bool:
         """Send an email notification."""
         if not self.enabled:
             logger.info(f"Email would be sent to user {user_id} - {title}")
             return False
-            
+
         # In a real implementation, this would use SMTP to send an email
         # For now, just log the attempt
         logger.info(f"Sending email to user {user_id}: {title}")
         logger.debug(f"Email content: {message}")
         return True
-    
-    def send_reminder(self, user_id: int, event_id: Optional[int] = None, 
-                     task_id: Optional[int] = None) -> bool:
+
+    def send_reminder(
+        self,
+        user_id: int,
+        event_id: Optional[int] = None,
+        task_id: Optional[int] = None,
+    ) -> bool:
         """Send a reminder email."""
         if not self.enabled:
             logger.info(f"Email reminder would be sent to user {user_id}")
             return False
-            
+
         if event_id:
             title = f"Reminder for Event #{event_id}"
             message = f"You have an upcoming event (ID: {event_id})"
@@ -87,7 +105,7 @@ class EmailNotificationService(NotificationService):
         else:
             logger.error("Either event_id or task_id must be provided")
             return False
-            
+
         return self.send_notification(user_id, title, message)
 
 

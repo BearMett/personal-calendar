@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class EventBase(BaseModel):
     """Base schema for Event."""
+
     title: str
     description: Optional[str] = None
     location: Optional[str] = None
@@ -18,11 +19,13 @@ class EventBase(BaseModel):
 
 class EventCreate(EventBase):
     """Schema for creating a new event."""
+
     pass
 
 
 class EventUpdate(BaseModel):
     """Schema for updating an existing event."""
+
     title: Optional[str] = None
     description: Optional[str] = None
     location: Optional[str] = None
@@ -36,6 +39,7 @@ class EventUpdate(BaseModel):
 
 class EventInDB(EventBase):
     """Event schema as stored in database."""
+
     id: int
     user_id: int
     created_at: datetime
@@ -47,9 +51,13 @@ class EventInDB(EventBase):
 
 class Event(EventInDB):
     """Schema for event response."""
+
     pass
 
 
 class NaturalLanguageEventRequest(BaseModel):
     """Schema for creating an event using natural language."""
-    text: str = Field(..., min_length=3, description="Natural language description of the event")
+
+    text: str = Field(
+        ..., min_length=3, description="Natural language description of the event"
+    )

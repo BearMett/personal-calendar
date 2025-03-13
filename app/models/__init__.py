@@ -1,23 +1,16 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from config import settings  # Changed from relative import to absolute import
 
-from ...config import settings
+DATABASE_URL = settings.SQLALCHEMY_DATABASE_URI
 
-# Create SQLAlchemy engine
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    # For SQLite, connect_args needed only for SQLite
-    connect_args={"check_same_thread": False} if settings.DB_CONNECTION == "sqlite" else {},
-)
-
-# Create SessionLocal class
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create Base class
 Base = declarative_base()
 
-# Dependency
+
 def get_db():
     db = SessionLocal()
     try:

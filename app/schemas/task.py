@@ -20,6 +20,7 @@ class TaskStatus(str, Enum):
 
 class TaskBase(BaseModel):
     """Base schema for Task."""
+
     title: str
     description: Optional[str] = None
     due_date: Optional[datetime] = None
@@ -30,11 +31,13 @@ class TaskBase(BaseModel):
 
 class TaskCreate(TaskBase):
     """Schema for creating a new task."""
+
     pass
 
 
 class TaskUpdate(BaseModel):
     """Schema for updating an existing task."""
+
     title: Optional[str] = None
     description: Optional[str] = None
     due_date: Optional[datetime] = None
@@ -45,6 +48,7 @@ class TaskUpdate(BaseModel):
 
 class TaskInDB(TaskBase):
     """Task schema as stored in database."""
+
     id: int
     user_id: int
     completed_at: Optional[datetime] = None
@@ -57,9 +61,13 @@ class TaskInDB(TaskBase):
 
 class Task(TaskInDB):
     """Schema for task response."""
+
     pass
 
 
 class NaturalLanguageTaskRequest(BaseModel):
     """Schema for creating a task using natural language."""
-    text: str = Field(..., min_length=3, description="Natural language description of the task")
+
+    text: str = Field(
+        ..., min_length=3, description="Natural language description of the task"
+    )

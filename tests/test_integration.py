@@ -19,15 +19,16 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 @pytest.fixture
 def test_db():
     # Create the test database and tables
     Base.metadata.create_all(bind=engine)
-    
+
     # Create test data
     db = TestingSessionLocal()
     from personal_calendar.app.models.user import User
-    
+
     # Create test user
     hashed_password = get_password_hash("testpassword")
     test_user = User(
@@ -35,13 +36,13 @@ def test_db():
         email="test@example.com",
         hashed_password=hashed_password,
         full_name="Test User",
-        is_active=True
+        is_active=True,
     )
     db.add(test_user)
     db.commit()
-    
+
     yield db
-    
+
     # Teardown - drop all tables
     Base.metadata.drop_all(bind=engine)
 
@@ -67,8 +68,7 @@ def client():
 def user_token(client):
     """Get authentication token for test user."""
     response = client.post(
-        "/api/auth/login",
-        json={"username": "testuser", "password": "testpassword"}
+        "/api/auth/login", json={"username": "testuser", "password": "testpassword"}
     )
     return response.json()["access_token"]
 
@@ -81,8 +81,8 @@ def test_register_user(client):
             "username": "newuser",
             "email": "new@example.com",
             "password": "newpassword",
-            "full_name": "New User"
-        }
+            "full_name": "New User",
+        },
     )
     assert response.status_code == 201
     data = response.json()
@@ -94,8 +94,7 @@ def test_register_user(client):
 def test_login(client):
     """Test login endpoint."""
     response = client.post(
-        "/api/auth/login",
-        json={"username": "testuser", "password": "testpassword"}
+        "/api/auth/login", json={"username": "testuser", "password": "testpassword"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -106,7 +105,7 @@ def test_login(client):
 def test_create_event(client, user_token):
     """Test creating an event."""
     headers = {"Authorization": f"Bearer {user_token}"}
-    
+
     response = client.post(
         "/api/events",
         headers=headers,
@@ -115,8 +114,8 @@ def test_create_event(client, user_token):
             "description": "Test description",
             "start_time": "2023-01-01T10:00:00",
             "end_time": "2023-01-01T11:00:00",
-            "is_all_day": False
-        }
+            "is_all_day": False,
+        },
     )
     assert response.status_code == 201
     data = response.json()
@@ -127,7 +126,7 @@ def test_create_event(client, user_token):
 def test_create_task(client, user_token):
     """Test creating a task."""
     headers = {"Authorization": f"Bearer {user_token}"}
-    
+
     response = client.post(
         "/api/tasks",
         headers=headers,
@@ -136,8 +135,8 @@ def test_create_task(client, user_token):
             "description": "Test task description",
             "due_date": "2023-01-01T10:00:00",
             "priority": "medium",
-            "status": "todo"
-        }
+            "status": "todo",
+        },
     )
     assert response.status_code == 201
     data = response.json()
@@ -148,11 +147,9 @@ def test_create_task(client, user_token):
 def test_create_event_from_text(client, user_token):
     """Test creating an event from natural language text."""
     headers = {"Authorization": f"Bearer {user_token}"}
-    
+
     response = client.post(
-        "/api/events/parse",
-        headers=headers,
-        json={"text": "Meeting tomorrow at 3pm"}
+        "/api/events/parse", headers=headers, json={"text": "Meeting tomorrow at 3pm"}
     )
     assert response.status_code == 201
     data = response.json()
@@ -163,11 +160,11 @@ def test_create_event_from_text(client, user_token):
 def test_agent_command(client, user_token):
     """Test the agent command endpoint."""
     headers = {"Authorization": f"Bearer {user_token}"}
-    
+
     response = client.post(
         "/api/agent/command",
         headers=headers,
-        json={"command": "Show my events for this week"}
+        json={"command": "Show my events for this week"},
     )
     assert response.status_code == 200
     data = response.json()

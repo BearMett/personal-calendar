@@ -14,14 +14,13 @@ router = APIRouter(tags=["agent"], prefix="/agent")
 async def process_agent_command(
     request: AgentCommandRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """Process a natural language command for the agent."""
     agent_service = AgentService(db)
-    
+
     result = agent_service.process_command(
-        user_id=current_user.id,
-        text=request.command
+        user_id=current_user.id, text=request.command
     )
-    
+
     return {"response": result}
