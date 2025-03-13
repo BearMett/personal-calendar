@@ -11,16 +11,21 @@ class GoogleCalendarService(CalendarInterface):
         self.service = build("calendar", "v3", credentials=self.credentials)
 
     @staticmethod
-    def get_auth_url(client_secrets_file: str, scopes: List[str]) -> str:
+    def get_auth_url(
+        client_secrets_file: str, scopes: List[str], redirect_uri: str
+    ) -> str:
         flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes)
+        flow.redirect_uri = redirect_uri  # 여기에 redirect_uri 설정 추가
         auth_url, _ = flow.authorization_url(prompt="consent")
         return auth_url
 
     @staticmethod
     def get_credentials_from_code(
-        client_secrets_file: str, scopes: List[str], code: str
+        client_secrets_file: str, scopes: List[str], code: str, redirect_uri: str
     ) -> Dict[str, str]:
-        flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes)
+        flow = InstalledAppFlow.from_client_secrets_file(
+            client_secrets_file, scopes, redirect_uri=redirect_uri
+        )
         flow.fetch_token(code=code)
         credentials = flow.credentials
         return {

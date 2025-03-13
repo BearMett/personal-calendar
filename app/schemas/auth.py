@@ -27,6 +27,7 @@ class UserCreate(UserBase):
     """User creation schema."""
 
     password: str = Field(..., min_length=8)
+    calendar_preference: Optional[str] = None  # Add calendar preference field
 
 
 class UserUpdate(BaseModel):

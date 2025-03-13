@@ -42,23 +42,44 @@ class Settings(BaseSettings):
     # Calendar Service Provider
     CALENDAR_SERVICE_PROVIDER: str = "google"  # Options: "google", "apple"
 
+    # Google OAuth Settings
+    GOOGLE_CLIENT_SECRETS_FILE: str = "client_secrets.json"
+    GOOGLE_OAUTH_SCOPES: list = [
+        "https://www.googleapis.com/auth/calendar",
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+    ]
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google-auth-callback"
+    GOOGLE_CREDENTIALS_DIR: str = "credentials"
+
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         if v:
             return v
-
         if values.get("DB_CONNECTION") == "sqlite":
             sqlite_db_path = values.get("BASE_DIR") / values.get(
                 "SQLITE_DB", "calendar.db"
             )
             return f"sqlite:///{sqlite_db_path}"
-
         # Manually construct the PostgreSQL connection string
         return (
             f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}"
             f"@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}"
             f"/{values.get('POSTGRES_DB')}"
         )
+
+    @validator("GOOGLE_CLIENT_SECRETS_FILE", pre=True)
+    def get_google_client_secrets_path(cls, v: str, values: Dict[str, Any]) -> str:
+        """Get the absolute path to the client secrets file"""
+        return str(values.get("BASE_DIR") / v)
+
+    @validator("GOOGLE_CREDENTIALS_DIR", pre=True)
+    def get_google_credentials_dir(cls, v: str, values: Dict[str, Any]) -> str:
+        """Get the absolute path to the credentials directory"""
+        credentials_dir = values.get("BASE_DIR") / v
+        os.makedirs(credentials_dir, exist_ok=True)
+        return str(credentials_dir)
 
     class Config:
         env_file = ".env"

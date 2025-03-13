@@ -18,16 +18,21 @@ services:
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - NOTIFICATION_LOG_LEVEL=INFO
+      # Google OAuth 환경 변수
+      - GOOGLE_CLIENT_SECRETS_FILE=/app/secrets/client_secrets.json
+      - GOOGLE_CREDENTIALS_DIR=/app/credentials
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/auth/google-auth-callback}
     volumes:
       - ./app:/app/app
+      - ./client_secrets.json:/app/secrets/client_secrets.json:ro  # 인증 파일 마운트(읽기 전용)
+      - google_credentials_data:/app/credentials  # 사용자 인증 정보 저장을 위한 볼륨
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/docs"]
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["/bin/sh", "-c", "alembic upgrade head && uvicorn app:app --host 0.0.0.0 --port 8000"]
-
+    command: ["/bin/sh", "-c", "if [ -f alembic.ini ]; then alembic upgrade head; fi && uvicorn app:app --host 0.0.0.0 --port 8000"]
   postgres:
     image: postgres:14
     volumes:
@@ -37,13 +42,13 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-calendar}
     ports:
-      - "5678:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: always
-
 volumes:
   postgres_data:
+  google_credentials_data:  # 사용자 인증 정보를 위한 영구 볼륨

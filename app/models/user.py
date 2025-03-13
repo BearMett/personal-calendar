@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 from . import Base
 
@@ -17,6 +17,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     calendar_preference = Column(String, nullable=True)  # Add calendar preference field
+    google_credentials = Column(Text, nullable=True)
 
     # Define relationships
     events = relationship("Event", back_populates="user")

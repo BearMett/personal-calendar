@@ -1,8 +1,10 @@
 fastapi
+bcrypt
 uvicorn
 sqlalchemy
 pydantic[email]
 pydantic-settings==2.0.3
+thinc
 alembic
 psycopg2-binary
 python-dotenv==1.0.0
