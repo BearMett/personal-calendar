@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     EMAIL_PASSWORD: Optional[str] = None
     EMAIL_FROM: Optional[str] = None
 
+    # Calendar Service Provider
+    CALENDAR_SERVICE_PROVIDER: str = "google"  # Options: "google", "apple"
+
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         if v:

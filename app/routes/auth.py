@@ -1,8 +1,7 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-
 from ..models import get_db
 from ..models.user import User
 from ..schemas.auth import Token, UserCreate, User as UserSchema, LoginRequest
@@ -13,6 +12,7 @@ from ..utils.auth import (
     get_password_hash,
 )
 from config import settings
+from ..services.google_calendar_service import GoogleCalendarService
 
 router = APIRouter(tags=["authentication"], prefix="/auth")
 
@@ -82,6 +82,7 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
         full_name=user_data.full_name,
         is_active=True,
         is_superuser=False,
+        calendar_preference=user_data.calendar_preference,  # Add calendar preference
     )
 
     db.add(db_user)
@@ -95,3 +96,31 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
     """Get current user information."""
     return current_user
+
+
+@router.get("/google-auth-url")
+async def get_google_auth_url():
+    """Get Google OAuth2 authorization URL."""
+    client_secrets_file = "path/to/client_secrets.json"
+    scopes = ["https://www.googleapis.com/auth/calendar"]
+    auth_url = GoogleCalendarService.get_auth_url(client_secrets_file, scopes)
+    return {"auth_url": auth_url}
+
+
+@router.get("/google-auth-callback")
+async def google_auth_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Handle Google OAuth2 callback and exchange code for tokens."""
+    code = request.query_params.get("code")
+    client_secrets_file = "path/to/client_secrets.json"
+    scopes = ["https://www.googleapis.com/auth/calendar"]
+    credentials = GoogleCalendarService.get_credentials_from_code(
+        client_secrets_file, scopes, code
+    )
+    # Store credentials in the database or user session
+    # Example: current_user.google_credentials = credentials
+    # db.commit()
+    return {"message": "Google Calendar linked successfully"}
